@@ -44,6 +44,12 @@ public actor ControlServer {
                 case .cancelled:
                     l?.stateUpdateHandler = nil
                     cont.resume(throwing: ControlServerError.cancelledBeforeReady)
+                case .waiting(let err):
+                    // 环回 + 固定端口：.waiting 意味着地址不可用且不会自愈（例如端口冲突）——
+                    // 必须快速失败而非无限重试，否则 start() 会永久挂起，阻塞守护进程主循环启动。
+                    l?.stateUpdateHandler = nil
+                    l?.cancel()
+                    cont.resume(throwing: err)
                 default:
                     break
                 }

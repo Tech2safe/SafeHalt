@@ -2,7 +2,7 @@ import Foundation
 
 /// 端点路由 + 鉴权。纯粹依赖注入，可脱离 socket 单测。
 /// 安全：除 /ping /pair 外均需 Bearer 令牌;/status 等含敏感目标信息故必须鉴权。
-public struct ControlRouter {
+public struct ControlRouter: Sendable {
     private let engine: EngineControl
     private let pairing: PairingStore
     private let random: RandomBytes
