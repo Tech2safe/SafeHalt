@@ -47,7 +47,15 @@ public enum HTTPParser {
 
         let bodyStart = headEnd.upperBound
         let available = data.subdata(in: bodyStart..<data.endIndex)
-        let contentLength = headers["content-length"].flatMap { Int($0) } ?? 0
+        let contentLength: Int
+        if let clStr = headers["content-length"] {
+            guard let cl = Int(clStr), cl >= 0 else {
+                throw HTTPRequestParseError.malformed("Content-Length 非法：\(clStr)")
+            }
+            contentLength = cl
+        } else {
+            contentLength = 0
+        }
         if available.count < contentLength { return .incomplete }
         let body = contentLength > 0 ? available.subdata(in: available.startIndex..<available.index(available.startIndex, offsetBy: contentLength)) : Data()
 

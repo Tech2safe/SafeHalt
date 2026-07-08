@@ -39,6 +39,16 @@ struct HTTPMessageTests {
         #expect(throws: HTTPRequestParseError.self) { try HTTPParser.parse(raw) }
     }
 
+    @Test func invalidContentLengthThrows() {
+        let raw = bytes("POST /config HTTP/1.1\r\nContent-Length: abc\r\n\r\n{\"a\":1}")
+        #expect(throws: HTTPRequestParseError.self) { try HTTPParser.parse(raw) }
+    }
+
+    @Test func headerWithoutColonThrows() {
+        let raw = bytes("GET /status HTTP/1.1\r\nBadHeaderLine\r\n\r\n")
+        #expect(throws: HTTPRequestParseError.self) { try HTTPParser.parse(raw) }
+    }
+
     @Test func authorizationHeaderLowercased() throws {
         let raw = bytes("GET /status HTTP/1.1\r\nAuthorization: Bearer abc\r\n\r\n")
         guard case .ok(let req) = try HTTPParser.parse(raw) else { Issue.record("应解析完成"); return }
@@ -54,6 +64,15 @@ struct HTTPMessageTests {
         #expect(text.contains("Content-Length: \(body.count)\r\n"))
         #expect(text.contains("Connection: close\r\n"))
         #expect(text.hasSuffix("\r\n\r\n" + #"{"ok":true}"#))
+    }
+
+    @Test func responseSerializesExactWireFormat() {
+        let bodyString = #"{"ok":true}"#
+        let body = bytes(bodyString)
+        #expect(body.count == 11)
+        let out = HTTPResponse.json(200, body).serialized()
+        let text = String(data: out, encoding: .utf8)!
+        #expect(text == "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}")
     }
 
     @Test func errorResponseWrapsMessage() {
