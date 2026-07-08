@@ -158,6 +158,33 @@ struct DaemonRunnerTests {
         #expect(st.enabled == false)
     }
 
+    /// 回归（Important）：暂停时不得冻结在途倒计时——恢复后若仍在电池上，
+    /// 必须重新起倒计时并弹可取消告警，不能因续算旧起点而直接跳到关机。
+    @Test func pauseThenResumeRestartsCountdownInsteadOfImmediateShutdown() async {
+        let a = MockSystemActions()
+        let cfg = DaemonConfig(host: "h", port: 3493, ups: "ups",
+                               onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true)
+        let r = DaemonRunner(settings: cfg, transportFactory: statusFactory("OB"), actions: a)
+        await r.tick(now: t0)                                   // OB → 起倒计时 + 弹告警
+        #expect(a.warningsShown == 1)
+        #expect(await r.onBatterySinceForTest == t0)
+        // 暂停（同目标，enabled=false）
+        let paused = DaemonConfig(host: "h", port: 3493, ups: "ups",
+                                  onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true, enabled: false)
+        await r.applySettings(paused)
+        #expect(await r.onBatterySinceForTest == nil)          // 暂停放弃在途倒计时
+        await r.tick(now: t0.addingTimeInterval(30*60))        // 暂停中：什么都不做
+        #expect(a.shutdownReasons.isEmpty)
+        // 恢复（仍 OB，且已远超原阈值）
+        let resumed = DaemonConfig(host: "h", port: 3493, ups: "ups",
+                                   onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true, enabled: true)
+        await r.applySettings(resumed)
+        await r.tick(now: t0.addingTimeInterval(31*60))        // 恢复后首个 tick
+        #expect(a.shutdownReasons.isEmpty)                     // 不立即关机
+        #expect(a.warningsShown == 2)                          // 弹了新的可取消告警
+        #expect(await r.onBatterySinceForTest == t0.addingTimeInterval(31*60))  // 新倒计时起点
+    }
+
     @Test func applySettingsPersistsAndArms() async {
         let a = MockSystemActions()
         let box = ConfigBox()

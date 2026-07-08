@@ -39,7 +39,12 @@ public actor DaemonRunner: EngineControl {
     public func applySettings(_ cfg: DaemonConfig) {
         let targetChanged = settings.map { $0.host != cfg.host || $0.port != cfg.port || $0.ups != cfg.ups } ?? true
         settings = cfg
-        if targetChanged { onBatterySince = nil; commLostSince = nil; lastStatus = nil; lastSeen = nil }
+        if targetChanged {
+            onBatterySince = nil; commLostSince = nil; lastStatus = nil; lastSeen = nil
+        } else if !cfg.enabled {
+            // 暂停：放弃任何在途倒计时，恢复后重新起倒计时并弹可取消告警（避免跳过告警直接关机），保留最近状态供显示
+            onBatterySince = nil; commLostSince = nil
+        }
         persist?(cfg)
         appendEvent(kind: "config", message: "配置已更新（\(cfg.host)/\(cfg.ups)，\(cfg.enabled ? "启用" : "暂停")）")
     }
