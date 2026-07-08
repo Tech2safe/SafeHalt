@@ -1564,12 +1564,15 @@ let router = ControlRouter(
     touchCancel: { FileManager.default.createFile(atPath: DaemonPaths.cancelFlagFile, contents: Data()) })
 
 let server = ControlServer(port: UInt16(DaemonPaths.httpPort), router: router)
-do {
-    try await server.start()
-    FileHandle.standardError.write(Data("[safehalt] 控制服务端已绑定 127.0.0.1:\(DaemonPaths.httpPort)\n".utf8))
-} catch {
-    // 安全：服务端绑定失败不得阻断保护循环
-    FileHandle.standardError.write(Data("[safehalt] 控制服务端启动失败（不影响断电保护）：\(error)\n".utf8))
+// 安全铁律：控制服务端在独立 Task 里启动，绝不排在保护循环之前。
+// 即便它启动慢或失败，runner.run() 也立即开跑——断电保护不被服务端拖延分毫。
+Task {
+    do {
+        try await server.start()
+        FileHandle.standardError.write(Data("[safehalt] 控制服务端已绑定 127.0.0.1:\(DaemonPaths.httpPort)\n".utf8))
+    } catch {
+        FileHandle.standardError.write(Data("[safehalt] 控制服务端启动失败（不影响断电保护）：\(error)\n".utf8))
+    }
 }
 
 await runner.run()
