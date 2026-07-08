@@ -1,6 +1,10 @@
 # SafeHalt
 
-A tiny native-Swift macOS shutdown daemon for network UPS (NUT) — safely powers your Mac down when the UPS runs low, **without depending on Homebrew or `upsmon`**. Ships as the `safehalt` binary.
+**SafeHalt 是 [Mac UPS Link](https://apps.apple.com/) 的开源断电保护引擎。** 一个原生 Swift 的 root 守护进程：断电转 UPS 供电、按策略倒计时后安全关机，零 Homebrew 依赖。
+
+> 推荐用法：安装 Mac UPS Link（macOS App），由它引导安装并配置 SafeHalt——配置、策略、取消关机、查看状态都在 App 里完成。SafeHalt 出厂为"哑"引擎，配对并接收 App 下发的策略后才激活断电关机。
+>
+> SafeHalt 与 Mac UPS Link 经本机 `127.0.0.1` 的令牌鉴权 HTTP 通道通信；关机决策完全自治于本守护进程，App 退出/卸载不影响已配置的保护。
 
 SafeHalt talks the NUT protocol directly to your NAS/server's `upsd`, and when mains has been out long enough (or the battery is critically low) it runs `/sbin/shutdown`. It is designed for the common home setup where a UPS is plugged into a NAS (Synology/QNAP/…) over USB, the NAS exposes NUT over the network, and a Mac that has *no* direct UPS connection needs to shut down safely on a power failure.
 
@@ -104,7 +108,7 @@ safehalt cancel        # writes /tmp/safehalt-cancel-shutdown; honored before th
 
 - The NUT monitor password is stored in a root-only (`600`) JSON file. It's a LAN-scoped monitor credential, but treat it accordingly.
 - `safehalt` is a from-scratch shutdown engine; it does not carry every edge case decades of `upsmon` handle (its comm-loss behavior is the conservative failsafe described above rather than `upsmon`'s `DEADTIME`).
-- The privileged install uses `osascript` elevation; the password dialog shows "osascript". A signed `.pkg` installer (branded name) is the proper distribution path and is not yet included.
+- `install-daemon.sh`/`uninstall-daemon.sh` use `osascript` elevation (the password dialog shows "osascript"); `./make-pkg.sh` builds a guided `.pkg` installer instead (unsigned by default — set `SIGN_ID` to sign with a Developer ID Installer certificate; notarization is still a manual `notarytool` step).
 
 ## License
 

@@ -12,3 +12,4 @@ DerivedData/
 # local config / build output
 config.json
 build/
+dist/
