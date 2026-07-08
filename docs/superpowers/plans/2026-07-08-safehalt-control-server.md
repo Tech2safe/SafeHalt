@@ -656,53 +656,52 @@ git commit -m "feat(control): 配对码/令牌生成 + SHA256 + PairingStore"
 
 - [ ] **Step 1: 写失败测试**
 
-在 `Tests/SafeHaltKitTests/DaemonRunnerTests.swift` 追加(保留原有测试;若原有 `DaemonRunner(config:...)` 构造在编译期报错,同时按 Step 5 的新签名更新原有用例的构造调用):
+在 `Tests/SafeHaltKitTests/DaemonRunnerTests.swift` 追加(**复用本文件已有的假件**:`MockSystemActions`、`statusFactory(_:)`、`t0`;保留原有测试)。先在 `struct DaemonRunnerTests` **之上**加一个小 Box(用于在 `@Sendable` persist 闭包里安全接收落盘值,避免捕获可变局部变量触发并发错误):
+
+```swift
+/// 测试用：@Sendable persist 闭包里安全存放落盘配置。
+final class ConfigBox: @unchecked Sendable { var value: DaemonConfig? }
+```
+
+然后在 `struct DaemonRunnerTests` 内追加:
 
 ```swift
     @Test func dumbWhenUnconfiguredDoesNotShutdown() async {
-        let actions = RecordingActions()   // 见下方说明：复用本测试文件已有的假 actions
-        let runner = DaemonRunner(settings: nil,
-                                  transportFactory: { _, _ in FakeTransport(script: []) },
-                                  actions: actions)
-        await runner.tick(now: Date())
-        #expect(actions.shutdownCount == 0)
-        let st = await runner.currentStatus(now: Date())
+        let a = MockSystemActions()
+        let r = DaemonRunner(settings: nil, transportFactory: statusFactory("OB"), actions: a)
+        await r.tick(now: t0)
+        #expect(a.shutdownReasons.isEmpty)
+        let st = await r.currentStatus(now: t0)
         #expect(st.configured == false)
         #expect(st.target == nil)
     }
 
     @Test func pausedWhenDisabledDoesNotShutdown() async {
-        let actions = RecordingActions()
-        let cfg = DaemonConfig(host: "h", port: 3493, ups: "ups",
-                               onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true, enabled: false)
-        let runner = DaemonRunner(settings: cfg,
-                                  transportFactory: { _, _ in FakeTransport(script: ["OB"]) },
-                                  actions: actions)
-        await runner.tick(now: Date())
-        #expect(actions.shutdownCount == 0)
-        let st = await runner.currentStatus(now: Date())
+        let a = MockSystemActions()
+        let disabled = DaemonConfig(host: "h", port: 3493, ups: "ups",
+                                    onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true, enabled: false)
+        let r = DaemonRunner(settings: disabled, transportFactory: statusFactory("OB"), actions: a)
+        await r.tick(now: t0)
+        #expect(a.shutdownReasons.isEmpty)
+        let st = await r.currentStatus(now: t0)
         #expect(st.configured == true)
         #expect(st.enabled == false)
     }
 
     @Test func applySettingsPersistsAndArms() async {
-        let actions = RecordingActions()
-        var persisted: DaemonConfig?
-        let runner = DaemonRunner(settings: nil,
-                                  transportFactory: { _, _ in FakeTransport(script: []) },
-                                  actions: actions,
-                                  persist: { persisted = $0 })
-        let cfg = DaemonConfig(host: "h", port: 3493, ups: "ups",
-                               onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true)
-        await runner.applySettings(cfg)
-        #expect(persisted == cfg)
-        let st = await runner.currentStatus(now: Date())
+        let a = MockSystemActions()
+        let box = ConfigBox()
+        let r = DaemonRunner(settings: nil, transportFactory: statusFactory("OL"),
+                             actions: a, persist: { box.value = $0 })
+        let newCfg = DaemonConfig(host: "h2", port: 3493, ups: "ups",
+                                  onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true)
+        await r.applySettings(newCfg)
+        #expect(box.value == newCfg)
+        let st = await r.currentStatus(now: t0)
         #expect(st.configured == true)
-        #expect(st.target == EngineTarget(host: "h", port: 3493, ups: "ups"))
+        #expect(st.target == EngineTarget(host: "h2", port: 3493, ups: "ups"))
     }
 ```
-
-> 说明:本测试用到 `RecordingActions`(记录 `shutdownCount` 等的假 `SystemActions`)与 `FakeTransport`(按脚本返回 NUT 状态帧)。若 `DaemonRunnerTests.swift` 已有等价假实现,复用之;否则在本文件顶部新增最小实现——`RecordingActions` 各方法计数/空实现、`isCancelRequested` 返回 false;`FakeTransport` 遵从 `NUTTransport`,对 `LIST VAR`/`GET VAR ups.status` 返回脚本给定的 `ups.status`(如 `"OB"`/`"OL"`)。实现须与既有测试的假实现保持一致命名,避免重复定义。
 
 - [ ] **Step 2: 运行确认失败**
 
@@ -1048,7 +1047,6 @@ struct ControlRouterTests {
         let code = try Pairing.initPairing(store: s, random: seq)
         let engine = FakeEngine(status: dumbStatus)
         let r = router(engine, s)
-        guard case .ok = try HTTPParser.parse(Data("x".utf8)) else {} // noop 保持 import
         let token = try #require(try Pairing.redeem(store: s, submittedCode: code, random: seq))
         let body = #"{"host":"192.168.0.5","port":3493,"ups":"ups","onBatteryMinutes":10,"shutdownAlsoOnLowBattery":true,"commLossFailsafeMinutes":5,"enabled":true}"#
         let resp = await r.handle(req("POST", "/config", headers: ["authorization": "Bearer \(token)"], body: body))
