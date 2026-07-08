@@ -66,4 +66,26 @@ struct PairingTests {
         _ = try Pairing.initPairing(store: store, random: seq)
         #expect(!Pairing.verifyToken(store: store, bearer: "anything"))
     }
+
+    @Test func savedFileContainsNoPlaintext() throws {
+        let path = NSTemporaryDirectory() + "pair-no-plaintext.json"
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = PairingStore(path: path)
+        let code = try Pairing.initPairing(store: store, random: seq)
+        let token = try Pairing.redeem(store: store, submittedCode: code, random: seq)
+        let raw = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+        #expect(!raw.contains(code))
+        #expect(!raw.contains(try #require(token)))
+        #expect(raw.contains(Pairing.sha256Hex(code)))
+        #expect(raw.contains(Pairing.sha256Hex(try #require(token))))
+    }
+
+    @Test func savedFileIsMode0600() throws {
+        let path = NSTemporaryDirectory() + "pair-mode-0600.json"
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = PairingStore(path: path)
+        _ = try Pairing.initPairing(store: store, random: seq)
+        let perms = try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int
+        #expect(perms == 0o600)
+    }
 }

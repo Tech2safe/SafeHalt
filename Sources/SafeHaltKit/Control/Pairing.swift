@@ -24,14 +24,16 @@ public struct PairingStore {
         let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
         let data = try enc.encode(state)
         try data.write(to: URL(fileURLWithPath: path), options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
     }
 }
 
 public enum Pairing {
     public static let secureRandom: RandomBytes = { count in
         var buf = [UInt8](repeating: 0, count: count)
-        _ = SecRandomCopyBytes(kSecRandomDefault, count, &buf)
+        guard SecRandomCopyBytes(kSecRandomDefault, count, &buf) == errSecSuccess else {
+            fatalError("SafeHalt: CSPRNG (SecRandomCopyBytes) 失败，拒绝生成可预测密钥")
+        }
         return buf
     }
 
