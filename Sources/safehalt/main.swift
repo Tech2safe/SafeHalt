@@ -24,7 +24,7 @@ while let arg = it.next() {
 do {
     let config = try DaemonConfig.load(path: configPath)
     let runner = DaemonRunner(
-        config: config,
+        settings: config,
         transportFactory: { NUTSocketSession(host: $0, port: $1) },
         actions: RealSystemActions(dryRun: dryRun))
     FileHandle.standardError.write(Data("[safehalt] 启动，轮询 \(config.host):\(config.port)/\(config.ups)，dry-run=\(dryRun)\n".utf8))

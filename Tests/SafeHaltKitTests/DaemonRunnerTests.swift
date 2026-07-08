@@ -18,6 +18,9 @@ final class UnreachableTransport: NUTTransport {
     func request(_ command: String) async throws -> [String] { throw Boom() }
 }
 
+/// 测试用：@Sendable persist 闭包里安全存放落盘配置。
+final class ConfigBox: @unchecked Sendable { var value: DaemonConfig? }
+
 struct DaemonRunnerTests {
     private func cfg(failsafe: Int = 0) -> DaemonConfig {
         DaemonConfig(host: "h", port: 3493, ups: "ups", username: "u", password: "p",
@@ -36,7 +39,7 @@ struct DaemonRunnerTests {
 
     @Test func onlineDoesNothing() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OL"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OL"), actions: a)
         await r.tick(now: t0)
         #expect(a.shutdownReasons.isEmpty)
         #expect(await r.onBatterySinceForTest == nil)
@@ -44,7 +47,7 @@ struct DaemonRunnerTests {
 
     @Test func onBatteryBeginsEpisodeAndWarns() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)
         #expect(a.episodesBegun == 1)
         #expect(a.warningsShown == 1)          // 转电池即弹可取消倒计时
@@ -54,7 +57,7 @@ struct DaemonRunnerTests {
 
     @Test func onBatteryPastThresholdShutsDown() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)
         await r.tick(now: t0.addingTimeInterval(10*60))
         #expect(a.shutdownReasons.count == 1)
@@ -63,7 +66,7 @@ struct DaemonRunnerTests {
     /// 回归（漏洞三）：关机 tick 只调 shutdown、不调通知——关机绝不被可能卡住的通知阻塞。
     @Test func shutdownTickDoesNotNotify() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)                       // 起倒计时（弹 warning，不 notify）
         let notifsBefore = a.notifications.count
         await r.tick(now: t0.addingTimeInterval(10*60))   // 关机 tick
@@ -73,7 +76,7 @@ struct DaemonRunnerTests {
 
     @Test func recoveryEndsEpisode() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)
         await r.setTransportFactoryForTest(statusFactory("OL"))
         await r.tick(now: t0.addingTimeInterval(60))
@@ -83,7 +86,7 @@ struct DaemonRunnerTests {
 
     @Test func cancelSuppressesShutdown() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)
         a.cancelRequested = true
         await r.tick(now: t0.addingTimeInterval(20*60))
@@ -92,7 +95,7 @@ struct DaemonRunnerTests {
 
     @Test func commLossFailsafeTriggersAfterWindow() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(failsafe: 5), transportFactory: unreachable, actions: a)
+        let r = DaemonRunner(settings: cfg(failsafe: 5), transportFactory: unreachable, actions: a)
         await r.tick(now: t0)                          // 首次掉线：记 commLostSince，尚未到阈值
         #expect(a.shutdownReasons.isEmpty)
         await r.tick(now: t0.addingTimeInterval(5*60)) // 到阈值：failsafe 起倒计时
@@ -103,7 +106,7 @@ struct DaemonRunnerTests {
 
     @Test func commLossDisabledNeverShutsDown() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(failsafe: 0), transportFactory: unreachable, actions: a)
+        let r = DaemonRunner(settings: cfg(failsafe: 0), transportFactory: unreachable, actions: a)
         await r.tick(now: t0)
         await r.tick(now: t0.addingTimeInterval(60*60))
         #expect(a.shutdownReasons.isEmpty)
@@ -113,7 +116,7 @@ struct DaemonRunnerTests {
     /// 关机必须先于本 tick 的“通信中断”通知——否则卡住的通知会拖死关机。
     @Test func shutdownPrecedesCommLossNotifyWhenBothOccur() async {
         let a = MockSystemActions()
-        let r = DaemonRunner(config: cfg(failsafe: 5), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(failsafe: 5), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)                              // 转电池，起倒计时
         await r.setTransportFactoryForTest(unreachable)    // 通信中断
         await r.tick(now: t0.addingTimeInterval(10*60))    // 到点 + 通信中断同 tick
@@ -127,9 +130,45 @@ struct DaemonRunnerTests {
     @Test func staleCancelFlagDoesNotSuppressNextEpisode() async {
         let a = MockSystemActions()
         a.cancelRequested = true                          // 上一轮遗留的残留标志
-        let r = DaemonRunner(config: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
         await r.tick(now: t0)
         #expect(a.episodesBegun == 1)                     // 起了新 episode（真实现里 beginEpisode 会清标志）
         #expect(await r.onBatterySinceForTest == t0)
+    }
+
+    @Test func dumbWhenUnconfiguredDoesNotShutdown() async {
+        let a = MockSystemActions()
+        let r = DaemonRunner(settings: nil, transportFactory: statusFactory("OB"), actions: a)
+        await r.tick(now: t0)
+        #expect(a.shutdownReasons.isEmpty)
+        let st = await r.currentStatus(now: t0)
+        #expect(st.configured == false)
+        #expect(st.target == nil)
+    }
+
+    @Test func pausedWhenDisabledDoesNotShutdown() async {
+        let a = MockSystemActions()
+        let disabled = DaemonConfig(host: "h", port: 3493, ups: "ups",
+                                    onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true, enabled: false)
+        let r = DaemonRunner(settings: disabled, transportFactory: statusFactory("OB"), actions: a)
+        await r.tick(now: t0)
+        #expect(a.shutdownReasons.isEmpty)
+        let st = await r.currentStatus(now: t0)
+        #expect(st.configured == true)
+        #expect(st.enabled == false)
+    }
+
+    @Test func applySettingsPersistsAndArms() async {
+        let a = MockSystemActions()
+        let box = ConfigBox()
+        let r = DaemonRunner(settings: nil, transportFactory: statusFactory("OL"),
+                             actions: a, persist: { box.value = $0 })
+        let newCfg = DaemonConfig(host: "h2", port: 3493, ups: "ups",
+                                  onBatteryMinutes: 10, shutdownAlsoOnLowBattery: true)
+        await r.applySettings(newCfg)
+        #expect(box.value == newCfg)
+        let st = await r.currentStatus(now: t0)
+        #expect(st.configured == true)
+        #expect(st.target == EngineTarget(host: "h2", port: 3493, ups: "ups"))
     }
 }
