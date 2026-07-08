@@ -14,16 +14,41 @@ public struct DaemonConfig: Codable, Equatable {
     /// 空闲时连续通信中断多少分钟触发 failsafe 关机；0 = 关闭。保守，宜 ≥ NAS 重启耗时。
     public let commLossFailsafeMinutes: Int
     public let pollSeconds: Int
+    /// App 可从控制面板暂停/恢复保护。默认 true（旧 config 无此字段时保持启用）。
+    public let enabled: Bool
 
-    public init(host: String, port: Int, ups: String, username: String, password: String,
+    public init(host: String, port: Int, ups: String,
+                username: String = "", password: String = "",
                 onBatteryMinutes: Int, shutdownAlsoOnLowBattery: Bool,
-                commLossFailsafeMinutes: Int, pollSeconds: Int) {
+                commLossFailsafeMinutes: Int = 0, pollSeconds: Int = 5,
+                enabled: Bool = true) {
         self.host = host; self.port = port; self.ups = ups
         self.username = username; self.password = password
         self.onBatteryMinutes = onBatteryMinutes
         self.shutdownAlsoOnLowBattery = shutdownAlsoOnLowBattery
         self.commLossFailsafeMinutes = commLossFailsafeMinutes
         self.pollSeconds = pollSeconds
+        self.enabled = enabled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case host, port, ups, username, password, onBatteryMinutes
+        case shutdownAlsoOnLowBattery, commLossFailsafeMinutes, pollSeconds, enabled
+    }
+
+    // 自定义解码：凭据/failsafe/poll/enabled 缺失时取默认，保证旧 config 向后兼容。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        host = try c.decode(String.self, forKey: .host)
+        port = try c.decode(Int.self, forKey: .port)
+        ups = try c.decode(String.self, forKey: .ups)
+        username = try c.decodeIfPresent(String.self, forKey: .username) ?? ""
+        password = try c.decodeIfPresent(String.self, forKey: .password) ?? ""
+        onBatteryMinutes = try c.decode(Int.self, forKey: .onBatteryMinutes)
+        shutdownAlsoOnLowBattery = try c.decode(Bool.self, forKey: .shutdownAlsoOnLowBattery)
+        commLossFailsafeMinutes = try c.decodeIfPresent(Int.self, forKey: .commLossFailsafeMinutes) ?? 0
+        pollSeconds = try c.decodeIfPresent(Int.self, forKey: .pollSeconds) ?? 5
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
     }
 
     public var policy: ShutdownPolicy {

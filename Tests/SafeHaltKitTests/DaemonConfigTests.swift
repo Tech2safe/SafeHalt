@@ -47,4 +47,27 @@ struct DaemonConfigTests {
         let bad = #"{"host":"h","port":3493,"ups":"ups","username":"u","password":"p","onBatteryMinutes":10,"shutdownAlsoOnLowBattery":true,"commLossFailsafeMinutes":-1,"pollSeconds":5}"#
         #expect(throws: DaemonConfigError.self) { try DaemonConfig.load(data: Data(bad.utf8)) }
     }
+
+    @Test func enabledDefaultsTrueWhenMissing() throws {
+        // 现役机器的旧 config 无 enabled 字段，须默认启用（升级不失保护）
+        let legacy = #"{"host":"h","port":3493,"ups":"ups","username":"u","password":"p","onBatteryMinutes":10,"shutdownAlsoOnLowBattery":true,"commLossFailsafeMinutes":5,"pollSeconds":5}"#
+        let cfg = try DaemonConfig.load(data: Data(legacy.utf8))
+        #expect(cfg.enabled == true)
+    }
+
+    @Test func credentialsOptionalDefaultEmpty() throws {
+        // 匿名读 UPS 状态，无需凭据；App 的 /config 不下发 username/password
+        let minimal = #"{"host":"h","port":3493,"ups":"ups","onBatteryMinutes":10,"shutdownAlsoOnLowBattery":true,"enabled":false}"#
+        let cfg = try DaemonConfig.load(data: Data(minimal.utf8))
+        #expect(cfg.username == "")
+        #expect(cfg.password == "")
+        #expect(cfg.commLossFailsafeMinutes == 0)
+        #expect(cfg.pollSeconds == 5)
+        #expect(cfg.enabled == false)
+    }
+
+    @Test func newPathsExist() {
+        #expect(DaemonPaths.httpPort == 57117)
+        #expect(DaemonPaths.pairingFile == "/Library/Application Support/SafeHalt/pairing.json")
+    }
 }
