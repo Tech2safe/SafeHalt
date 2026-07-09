@@ -4,13 +4,16 @@ import Testing
 
 private actor FakeEngine: EngineControl {
     var applied: DaemonConfig?
+    private(set) var resumedCount = 0
     let status: EngineStatus
     let events: [EngineEvent]
     init(status: EngineStatus, events: [EngineEvent] = []) { self.status = status; self.events = events }
     func currentStatus(now: Date) async -> EngineStatus { status }
     func recentEvents(limit: Int) async -> [EngineEvent] { Array(events.prefix(limit)) }
     func applySettings(_ cfg: DaemonConfig) async { applied = cfg }
+    func resumeCountdown() async { resumedCount += 1 }
     func appliedConfig() -> DaemonConfig? { applied }
+    func resumes() -> Int { resumedCount }
 }
 
 struct ControlRouterTests {
@@ -103,6 +106,24 @@ struct ControlRouterTests {
         let resp = await r.handle(req("POST", "/cancel", headers: ["authorization": "Bearer \(token)"]))
         #expect(resp.status == 200)
         #expect(touched == true)
+    }
+
+    @Test func resumeCallsEngine() async throws {
+        let s = store("resume"); defer { try? FileManager.default.removeItem(atPath: s.path) }
+        let code = try Pairing.initPairing(store: s, random: seq)
+        let token = try #require(try Pairing.redeem(store: s, submittedCode: code, random: seq))
+        let engine = FakeEngine(status: dumbStatus)
+        let r = router(engine, s)
+        let resp = await r.handle(req("POST", "/resume", headers: ["authorization": "Bearer \(token)"]))
+        #expect(resp.status == 200)
+        #expect(await engine.resumes() == 1)
+    }
+
+    @Test func resumeRequiresToken() async throws {
+        let s = store("resume-noauth"); defer { try? FileManager.default.removeItem(atPath: s.path) }
+        _ = try Pairing.initPairing(store: s, random: seq)
+        let r = router(FakeEngine(status: dumbStatus), s)
+        #expect(await r.handle(req("POST", "/resume")).status == 401)
     }
 
     @Test func logReturnsEvents() async throws {

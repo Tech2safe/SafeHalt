@@ -29,12 +29,12 @@ public struct RealSystemActions: SystemActions {
     public func presentCancelableWarning(minutes: Int, message: String) {
         log("弹可取消倒计时告警：\(minutes) 分钟")
         guard let uid = consoleUID() else { return }
-        let cancelBtn = "取消关机（风险自负）"
+        let cancelBtn = "取消关机"
         let safeMsg = message.replacingOccurrences(of: "\"", with: "'")
         // 对话框存活整个倒计时（giving up after），到期自动放行；点取消由脚本自写标志文件。
-        // fire-and-forget：绝不等待用户，绝不阻塞关机。
+        // fire-and-forget：绝不等待用户，绝不阻塞关机。消息第二行提示取消有风险。
         runDetached("/bin/launchctl", ["asuser", "\(uid)", "/usr/bin/osascript",
-            "-e", "set res to (display alert \"⚡ 断电保护\" message \"\(safeMsg)\" buttons {\"\(cancelBtn)\", \"知道了\"} default button \"知道了\" giving up after \(minutes * 60))",
+            "-e", "set res to (display alert \"⚡ 断电保护\" message (\"\(safeMsg)\" & return & return & \"有风险，请自行关机\") buttons {\"\(cancelBtn)\", \"知道了\"} default button \"知道了\" giving up after \(minutes * 60))",
             "-e", "if (gave up of res) is false and (button returned of res) is \"\(cancelBtn)\" then do shell script \"/usr/bin/touch '\(DaemonPaths.cancelFlagFile)'\""])
     }
 

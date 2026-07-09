@@ -29,6 +29,7 @@ public struct ControlRouter: Sendable {
             case ("POST", "/config"): return await applyConfig(req)
             case ("GET", "/status"):  return await status()
             case ("POST", "/cancel"): touchCancel(); return ok()
+            case ("POST", "/resume"): await engine.resumeCountdown(); return ok()
             case ("GET", "/log"):     return await log(req)
             default:                  return .error(404, "未知端点")
             }

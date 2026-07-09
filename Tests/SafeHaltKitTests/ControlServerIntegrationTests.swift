@@ -12,6 +12,7 @@ private actor StubEngine: EngineControl {
     }
     func recentEvents(limit: Int) async -> [EngineEvent] { [] }
     func applySettings(_ cfg: DaemonConfig) async {}
+    func resumeCountdown() async {}
 }
 
 struct ControlServerIntegrationTests {

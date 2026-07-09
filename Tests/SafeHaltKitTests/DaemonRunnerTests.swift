@@ -93,6 +93,36 @@ struct DaemonRunnerTests {
         #expect(a.shutdownReasons.isEmpty)
     }
 
+    /// 用户取消后：停显倒计时 + 报告 episodeCancelled + 记事件/通知一次；超阈值仍不关机；市电恢复复位。
+    @Test func userCancelReportsCancelledStateAndFeedback() async {
+        let a = MockSystemActions()
+        let r = DaemonRunner(settings: cfg(), transportFactory: statusFactory("OB"), actions: a)
+        await r.tick(now: t0)                                   // OB → 起倒计时
+        var st = await r.currentStatus(now: t0)
+        #expect(st.countdownActive == true)
+        #expect(st.episodeCancelled == false)
+
+        a.cancelRequested = true                               // 用户取消
+        await r.tick(now: t0.addingTimeInterval(60))
+        st = await r.currentStatus(now: t0.addingTimeInterval(60))
+        #expect(st.countdownActive == false)                   // 停显倒计时
+        #expect(st.episodeCancelled == true)                   // 报告已取消
+        #expect(a.notifications.contains { $0.contains("已取消本次关机") })   // 有明确反馈
+        let cancelEvents = await r.recentEvents(limit: 100).filter { $0.kind == "cancel" }
+        #expect(cancelEvents.count == 1)                       // 事件仅记一次
+
+        await r.tick(now: t0.addingTimeInterval(20*60))        // 超阈值：仍不关机
+        #expect(a.shutdownReasons.isEmpty)
+        let stillOneCancel = await r.recentEvents(limit: 100).filter { $0.kind == "cancel" }
+        #expect(stillOneCancel.count == 1)                    // 不重复记事件
+
+        await r.setTransportFactoryForTest(statusFactory("OL"))  // 市电恢复
+        a.cancelRequested = false
+        await r.tick(now: t0.addingTimeInterval(21*60))
+        st = await r.currentStatus(now: t0.addingTimeInterval(21*60))
+        #expect(st.episodeCancelled == false)                 // 复位
+    }
+
     @Test func commLossFailsafeTriggersAfterWindow() async {
         let a = MockSystemActions()
         let r = DaemonRunner(settings: cfg(failsafe: 5), transportFactory: unreachable, actions: a)

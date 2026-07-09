@@ -28,13 +28,16 @@ public struct EngineStatus: Codable, Equatable {
     public let lastSeenEpoch: Double?
     public let countdownActive: Bool
     public let countdownRemainingSeconds: Int?
+    /// 用户已取消本次关机（仍在电池，但恢复市电前不会关机）。
+    public let episodeCancelled: Bool
     public let policy: EnginePolicyDTO?
     public init(configured: Bool, enabled: Bool, target: EngineTarget?, connected: Bool,
                 lastStatusRaw: String?, lastSeenEpoch: Double?, countdownActive: Bool,
-                countdownRemainingSeconds: Int?, policy: EnginePolicyDTO?) {
+                countdownRemainingSeconds: Int?, episodeCancelled: Bool = false, policy: EnginePolicyDTO?) {
         self.configured = configured; self.enabled = enabled; self.target = target
         self.connected = connected; self.lastStatusRaw = lastStatusRaw; self.lastSeenEpoch = lastSeenEpoch
         self.countdownActive = countdownActive; self.countdownRemainingSeconds = countdownRemainingSeconds
+        self.episodeCancelled = episodeCancelled
         self.policy = policy
     }
 }
@@ -54,4 +57,6 @@ public protocol EngineControl: Sendable {
     func currentStatus(now: Date) async -> EngineStatus
     func recentEvents(limit: Int) async -> [EngineEvent]
     func applySettings(_ cfg: DaemonConfig) async
+    /// 用户在"本次已取消"后反悔：清取消标志、重启一次全新可取消倒计时。
+    func resumeCountdown() async
 }
