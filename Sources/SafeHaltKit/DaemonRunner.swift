@@ -9,6 +9,7 @@ public actor DaemonRunner: EngineControl {
     private var transportFactory: @Sendable (String, Int) -> NUTTransport
     private let actions: SystemActions
     private let persist: (@Sendable (DaemonConfig) -> Void)?
+    private let persistEvents: (@Sendable ([EngineEvent]) -> Void)?
 
     private var onBatterySince: Date?
     private var commLostSince: Date?
@@ -24,11 +25,15 @@ public actor DaemonRunner: EngineControl {
     public init(settings: DaemonConfig?,
                 transportFactory: @escaping @Sendable (String, Int) -> NUTTransport,
                 actions: SystemActions,
-                persist: (@Sendable (DaemonConfig) -> Void)? = nil) {
+                persist: (@Sendable (DaemonConfig) -> Void)? = nil,
+                initialEvents: [EngineEvent] = [],
+                persistEvents: (@Sendable ([EngineEvent]) -> Void)? = nil) {
         self.settings = settings
         self.transportFactory = transportFactory
         self.actions = actions
         self.persist = persist
+        self.events = Array(initialEvents.suffix(eventCap))
+        self.persistEvents = persistEvents
     }
 
     public var onBatterySinceForTest: Date? { onBatterySince }
@@ -96,6 +101,7 @@ public actor DaemonRunner: EngineControl {
     private func appendEvent(kind: String, message: String) {
         events.append(EngineEvent(atEpoch: Date().timeIntervalSince1970, kind: kind, message: message))
         if events.count > eventCap { events.removeFirst(events.count - eventCap) }
+        persistEvents?(events)
     }
 
     // MARK: 主循环
@@ -141,8 +147,9 @@ public actor DaemonRunner: EngineControl {
             appendEvent(kind: "restore", message: "市电已恢复，取消关机")
             actions.notify("市电已恢复，取消关机。")
         case .shutdownNow:
-            appendEvent(kind: "shutdown", message: decision.reason)
+            // 先发关机命令再记事件（含写盘），写盘绝不拖慢关机
             actions.shutdown(reason: decision.reason)
+            appendEvent(kind: "shutdown", message: decision.reason)
         }
 
         // 用户取消检测：倒计时中收到取消标志。决策核心已把本次判为 .none（不关机），

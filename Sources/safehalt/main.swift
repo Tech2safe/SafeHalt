@@ -54,6 +54,7 @@ do {
 }
 
 let capturedPath = configPath
+let eventStore = EventStore(path: DaemonPaths.eventsFile)
 let runner = DaemonRunner(
     settings: settings,
     transportFactory: { NUTSocketSession(host: $0, port: $1) },
@@ -64,7 +65,9 @@ let runner = DaemonRunner(
             try? data.write(to: URL(fileURLWithPath: capturedPath), options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: capturedPath)
         }
-    })
+    },
+    initialEvents: eventStore.load(),
+    persistEvents: { eventStore.save($0) })
 
 let router = ControlRouter(
     engine: runner,

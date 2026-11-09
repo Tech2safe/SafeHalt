@@ -12,4 +12,6 @@ public enum DaemonPaths {
     public static let httpPort = 57117
     /// 配对状态（配对码哈希 + 令牌哈希），600 root。绝不由沙盒 App 读写，只经 HTTP。
     public static let pairingFile = "/Library/Application Support/SafeHalt/pairing.json"
+    /// 近期事件（/log 的数据源），600 root，重启后保留。
+    public static let eventsFile = "/Library/Application Support/SafeHalt/events.json"
 }
