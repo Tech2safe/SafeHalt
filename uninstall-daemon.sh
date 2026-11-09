@@ -8,6 +8,8 @@ launchctl unload /Library/LaunchDaemons/com.safehalt.daemon.plist 2>/dev/null ||
 rm -f /Library/LaunchDaemons/com.safehalt.daemon.plist
 rm -f /usr/local/bin/safehalt
 rm -f "/Library/Application Support/SafeHalt/config.json"
+rm -f "/Library/Application Support/SafeHalt/pairing.json"
+rm -f "/Library/Application Support/SafeHalt/events.json"
 rm -f /tmp/safehalt-cancel-shutdown
 echo SAFEHALT_DAEMON_UNINSTALLED
 UNINSTALL

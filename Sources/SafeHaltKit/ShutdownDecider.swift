@@ -51,6 +51,11 @@ public enum ShutdownDecider {
             guard let since = s.onBatterySince else {
                 return ShutdownDecision(.startCountdown, "转电池供电，开始关机倒计时")
             }
+            // 用户设定的最低电量（位于「取消」检查之后：可被取消；UPS 自带 LB 兜底见第 1 步，不可取消）
+            if let st = s.status, st.isOnBattery, !st.isOnline, s.policy.minChargePercent > 0,
+               let charge = st.batteryCharge, charge <= s.policy.minChargePercent {
+                return ShutdownDecision(.shutdownNow, "电量降至 \(charge)%（不高于设定的 \(s.policy.minChargePercent)%），执行关机")
+            }
             if s.now.timeIntervalSince(since) >= Double(s.policy.onBatteryMinutes * 60) {
                 return ShutdownDecision(.shutdownNow, "转电池超过设定时长，执行关机")
             }
