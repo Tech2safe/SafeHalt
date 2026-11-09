@@ -51,15 +51,7 @@ public struct RealSystemActions: SystemActions {
         return name != nil && uid != 0 ? uid : nil
     }
 
-    private func log(_ s: String) {
-        let line = "[safehalt] \(s)\n"
-        if let h = FileHandle(forWritingAtPath: DaemonPaths.logFile) {
-            h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
-        } else {
-            try? line.write(toFile: DaemonPaths.logFile, atomically: true, encoding: .utf8)
-        }
-        FileHandle.standardError.write(Data(line.utf8))
-    }
+    private func log(_ s: String) { DaemonLog.write(s) }
 
     /// 启动外部命令后立即返回，绝不 waitUntilExit——防止卡住的 osascript 拖死主循环。
     private func runDetached(_ path: String, _ args: [String]) {

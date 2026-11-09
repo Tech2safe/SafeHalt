@@ -19,7 +19,7 @@ if args.first == "pair-init" {
         print("PAIRING_CODE=\(code)")
         exit(0)
     } catch {
-        FileHandle.standardError.write(Data("[safehalt] pair-init 失败: \(error)\n".utf8))
+        DaemonLog.write("pair-init 失败: \(error)")
         exit(1)
     }
 }
@@ -47,10 +47,10 @@ while let arg = it.next() {
 let settings: DaemonConfig?
 do {
     settings = try DaemonConfig.load(path: configPath)
-    FileHandle.standardError.write(Data("[safehalt] 启动，配置就绪 \(settings!.host):\(settings!.port)/\(settings!.ups)，enabled=\(settings!.enabled)，dry-run=\(dryRun)\n".utf8))
+    DaemonLog.write("启动，配置就绪 \(settings!.host):\(settings!.port)/\(settings!.ups)，enabled=\(settings!.enabled)，dry-run=\(dryRun)")
 } catch {
     settings = nil
-    FileHandle.standardError.write(Data("[safehalt] 无有效配置（哑模式，仅等待 Mac UPS Link 配对）：\(error)\n".utf8))
+    DaemonLog.write("无有效配置（哑模式，仅等待 Mac UPS Link 配对）：\(error)")
 }
 
 let capturedPath = configPath
@@ -82,9 +82,9 @@ let server = ControlServer(port: UInt16(DaemonPaths.httpPort), router: router)
 Task {
     do {
         try await server.start()
-        FileHandle.standardError.write(Data("[safehalt] 控制服务端已绑定 127.0.0.1:\(DaemonPaths.httpPort)\n".utf8))
+        DaemonLog.write("控制服务端已绑定 127.0.0.1:\(DaemonPaths.httpPort)")
     } catch {
-        FileHandle.standardError.write(Data("[safehalt] 控制服务端启动失败（不影响断电保护）：\(error)\n".utf8))
+        DaemonLog.write("控制服务端启动失败（不影响断电保护）：\(error)")
     }
 }
 
