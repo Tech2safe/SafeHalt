@@ -70,6 +70,7 @@ Create a `config.json`:
 
 - `onBatteryMinutes` — shut down after this many minutes on battery (must be ≥ 1).
 - `shutdownAlsoOnLowBattery` — also shut down immediately when the UPS reports low battery.
+- `minChargePercent` (optional, default `0`) — an extra minimum-charge threshold on top of the UPS's own low-battery signal: while on battery, shut down once `battery.charge` drops to this percentage. `0` relies on the UPS default only; otherwise `5`–`95`. Unlike the UPS low-battery floor, a user cancel suppresses it.
 - `commLossFailsafeMinutes` — if the daemon can't reach the UPS this long while idle, treat it as a suspected outage and start the countdown. `0` disables the failsafe. Set it comfortably longer than a normal NAS reboot.
 - `pollSeconds` — poll interval.
 

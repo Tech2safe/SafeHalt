@@ -11,10 +11,13 @@ public struct EnginePolicyDTO: Codable, Equatable {
     public let onBatteryMinutes: Int
     public let shutdownAlsoOnLowBattery: Bool
     public let commLossFailsafeMinutes: Int
-    public init(onBatteryMinutes: Int, shutdownAlsoOnLowBattery: Bool, commLossFailsafeMinutes: Int) {
+    public let minChargePercent: Int
+    public init(onBatteryMinutes: Int, shutdownAlsoOnLowBattery: Bool, commLossFailsafeMinutes: Int,
+                minChargePercent: Int = 0) {
         self.onBatteryMinutes = onBatteryMinutes
         self.shutdownAlsoOnLowBattery = shutdownAlsoOnLowBattery
         self.commLossFailsafeMinutes = commLossFailsafeMinutes
+        self.minChargePercent = minChargePercent
     }
 }
 

@@ -91,7 +91,8 @@ public actor DaemonRunner: EngineControl {
             episodeCancelled: episodeCancelled,
             policy: EnginePolicyDTO(onBatteryMinutes: cfg.onBatteryMinutes,
                                     shutdownAlsoOnLowBattery: cfg.shutdownAlsoOnLowBattery,
-                                    commLossFailsafeMinutes: cfg.commLossFailsafeMinutes))
+                                    commLossFailsafeMinutes: cfg.commLossFailsafeMinutes,
+                                    minChargePercent: cfg.minChargePercent))
     }
 
     public func recentEvents(limit: Int) -> [EngineEvent] {
